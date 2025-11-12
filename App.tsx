@@ -1,3 +1,5 @@
+// --- FINAL POE: PART 2 (UI & features) + PART 3 (logic & calculations) ---
+
 import React, { useState } from "react";
 import {
   View,
@@ -8,7 +10,12 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from "react-native";
+
+// For strict TS in web builds
+declare const window: any;
+declare const alert: any;
 
 type Course = "Starters" | "Mains" | "Desserts";
 type Dish = {
@@ -34,6 +41,7 @@ export default function App() {
     danger: "#FF5C5C",
   };
 
+  // Preloaded sample dishes
   const [dishes, setDishes] = useState<Dish[]>([
     {
       id: 1,
@@ -65,6 +73,55 @@ export default function App() {
   const [step, setStep] = useState(1);
   const [tab, setTab] = useState<TabKey>("Home");
 
+  // --- PART 3: Logic (functions, loops, validation) ---
+  // For-loop average calculator per course (meets loop + function requirement)
+  const calcAverages = (arr: Dish[]) => {
+    const result: Record<Course, number> = {
+      Starters: 0,
+      Mains: 0,
+      Desserts: 0,
+    };
+    for (const c of COURSES) {
+      const subset = arr.filter((d) => d.course === c);
+      if (subset.length) {
+        let total = 0;
+        for (let i = 0; i < subset.length; i++) total += subset[i].price;
+        result[c] = parseFloat((total / subset.length).toFixed(2));
+      }
+    }
+    return result;
+  };
+
+  // Delete with confirmation
+  const deleteDish = (id: number) => {
+    if (Platform.OS === "web") {
+      const ok = window.confirm("Are you sure you want to delete this dish?");
+      if (ok) {
+        setDishes((prev) => {
+          const updated = prev.filter((d) => d.id !== id);
+          return [...updated]; // force new array reference
+        });
+        try {
+          alert("✅ Dish deleted successfully!");
+        } catch {}
+      }
+    } else {
+      Alert.alert("Remove Dish", "Are you sure you want to delete this dish?", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, Remove",
+          style: "destructive",
+          onPress: () =>
+            setDishes((prev) => {
+              const updated = prev.filter((d) => d.id !== id);
+              return [...updated];
+            }),
+        },
+      ]);
+    }
+  };
+
+  // Add with validation (non-empty, price > 0, course selected)
   const addDish = () => {
     if (!name.trim() || !description.trim() || !priceText.trim() || !course) {
       Alert.alert("Validation", "Please complete all fields.");
@@ -93,9 +150,15 @@ export default function App() {
     setTab("Home");
   };
 
-  const deleteDish = (id: number) =>
-    setDishes((prev) => prev.filter((d) => d.id !== id));
+  // Derived metrics (Part 3)
+  const averages = calcAverages(dishes);
+  const totalCount = dishes.length;
+  const overall =
+    totalCount > 0
+      ? (dishes.reduce((sum, d) => sum + d.price, 0) / totalCount).toFixed(2)
+      : "0.00";
 
+  // --- PART 2: UI components ---
   const DishCard = ({ dish }: { dish: Dish }) => (
     <View style={[styles.card, { borderColor: colors.border }]}>
       <View style={{ flex: 1 }}>
@@ -115,18 +178,88 @@ export default function App() {
     </View>
   );
 
+  // HOME + Part 3 Summary appended after list
   const Home = () => (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Menu</Text>
-      <FlatList
-        data={dishes}
-        keyExtractor={(d) => String(d.id)}
-        renderItem={({ item }) => <DishCard dish={item} />}
-        contentContainerStyle={{ paddingBottom: 24 }}
-      />
+
+      {dishes.length === 0 ? (
+        <Text
+          style={{
+            color: colors.muted,
+            textAlign: "center",
+            marginVertical: 20,
+          }}
+        >
+          No dishes yet — add some in the Manage tab.
+        </Text>
+      ) : (
+        <FlatList
+          data={dishes}
+          keyExtractor={(d) => String(d.id)}
+          renderItem={({ item }) => (
+            <View
+              style={[
+                styles.menuCard,
+                { borderColor: colors.border, backgroundColor: colors.card },
+              ]}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.cardSub, { color: colors.secondary }]}>
+                  {item.course}
+                </Text>
+                <Text style={[styles.cardDesc, { color: colors.muted }]}>
+                  {item.description}
+                </Text>
+                <Text style={[styles.cardPrice, { color: colors.accent }]}>
+                  R {item.price.toFixed(2)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.deleteBtn, { backgroundColor: colors.danger }]}
+                onPress={() => deleteDish(item.id)}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          contentContainerStyle={{ paddingBottom: 24 }}
+        />
+      )}
+
+      {/* --- PART 3: Summary block (totals + averages) --- */}
+      <View
+        style={{
+          marginTop: 16,
+          padding: 14,
+          borderRadius: 12,
+          backgroundColor: "#F3FAF9",
+        }}
+      >
+        <Text
+          style={{ fontWeight: "800", color: colors.text, marginBottom: 6 }}
+        >
+          Menu Summary
+        </Text>
+        <Text style={{ color: colors.muted, marginBottom: 6 }}>
+          Total dishes: {totalCount}
+        </Text>
+        <Text style={{ color: colors.muted, marginBottom: 6 }}>
+          Overall average: R{overall}
+        </Text>
+        {COURSES.map((c) => (
+          <Text key={c} style={{ color: colors.secondary, fontWeight: "700" }}>
+            {c}: R{averages[c]}
+          </Text>
+        ))}
+      </View>
     </ScrollView>
   );
 
+  // FILTER
   const Filter = () => {
     const [filter, setFilter] = useState<Course | null>(null);
     const filtered = filter
@@ -186,9 +319,9 @@ export default function App() {
     );
   };
 
+  // MANAGE with validation (Part 3)
   const Manage = () => (
     <ScrollView contentContainerStyle={{ padding: 16 }}>
-      {/* 🍳 New Dish Creator Section */}
       {step === 1 ? (
         <View
           style={[
@@ -302,7 +435,7 @@ export default function App() {
         </View>
       )}
 
-      {/* 🍽️ Your Menu Board */}
+      {/* Menu Board */}
       <View style={{ marginTop: 28 }}>
         <Text style={[styles.menuTitle, { color: colors.text }]}>
           🍽️ Your Menu Board
@@ -394,6 +527,7 @@ export default function App() {
   );
 }
 
+// --- Styles ---
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   sectionTitle: {
@@ -454,17 +588,8 @@ const styles = StyleSheet.create({
   backText: { fontWeight: "700" },
   saveBtn: { borderRadius: 20, paddingVertical: 10, paddingHorizontal: 28 },
   saveText: { color: "#fff", fontWeight: "700" },
-  menuTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    marginBottom: 4,
-  },
-  titleBar: {
-    height: 3,
-    width: 60,
-    borderRadius: 2,
-    marginBottom: 12,
-  },
+  menuTitle: { fontSize: 18, fontWeight: "800", marginBottom: 4 },
+  titleBar: { height: 3, width: 60, borderRadius: 2, marginBottom: 12 },
   menuCard: {
     flexDirection: "row",
     alignItems: "center",
